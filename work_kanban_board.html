@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Kanban Board</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(156, 163, 175, 0.7);
+    }
+    /* Drag & Drop Visual Dynamics */
+    .task-card.dragging {
+      opacity: 0.4;
+      transform: scale(0.98);
+    }
+    .drag-over {
+      background-color: rgba(59, 130, 246, 0.08) !important;
+      border: 2px dashed #3b82f6 !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 h-full flex flex-col font-sans transition-colors duration-200 select-none">
+
+  <!-- TOP HEADER & TOOLBAR -->
+  <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4 flex-shrink-0 shadow-sm">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+          <i class="fa-solid fa-kanban text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold leading-tight tracking-tight">Work Stream Kanban</h1>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Agile Workflow & Work-in-Progress Optimization</p>
+        </div>
+      </div>
+
+      <!-- Main Action Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- New Task Button -->
+        <button onclick="openTaskModal()" class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition shadow-sm hover:shadow active:scale-95">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>New Task</span>
+        </button>
+
+        <!-- WIP Limits Config Button -->
+        <button onclick="openWipModal()" title="Configure WIP Limits" class="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition border border-gray-200 dark:border-gray-700 text-sm">
+          <i class="fa-solid fa-sliders text-xs"></i>
+          <span class="hidden sm:inline">WIP Limits</span>
+        </button>
+
+        <!-- Import / Export -->
+        <button onclick="exportBoard()" title="Export Board JSON" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition border border-gray-200 dark:border-gray-700">
+          <i class="fa-solid fa-download"></i>
+        </button>
+        <button onclick="triggerImport()" title="Import Board JSON" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition border border-gray-200 dark:border-gray-700">
+          <i class="fa-solid fa-upload"></i>
+        </button>
+        <input type="file" id="importInput" accept=".json" class="hidden" onchange="importBoard(event)">
+
+        <!-- Dark/Light Theme Toggle -->
+        <button onclick="toggleDarkMode()" id="themeToggleBtn" title="Toggle Dark/Light Mode" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition border border-gray-200 dark:border-gray-700">
+          <i class="fa-solid fa-moon dark:hidden"></i>
+          <i class="fa-solid fa-sun hidden dark:block text-yellow-400"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- FILTER & ANALYTICS SUMMARY BAR -->
+    <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+      
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <!-- Search Input -->
+        <div class="relative flex-grow md:flex-grow-0">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Search tasks..." class="w-full md:w-56 pl-8 pr-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+
+        <!-- Tag Filter -->
+        <select id="tagFilter" onchange="applyFilters()" class="py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <option value="ALL">All Categories</option>
+          <option value="Feature">Feature</option>
+          <option value="Bug">Bug</option>
+          <option value="Admin">Admin</option>
+          <option value="Operations">Operations</option>
+        </select>
+
+        <!-- Priority Filter -->
+        <select id="priorityFilter" onchange="applyFilters()" class="py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <option value="ALL">All Priorities</option>
+          <option value="Urgent">Urgent</option>
+          <option value="High">High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+
+        <!-- Reset Button -->
+        <button onclick="resetFilters()" class="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 px-2 py-1 transition">
+          Reset Filters
+        </button>
+      </div>
+
+      <!-- Quick Stats Widgets -->
+      <div class="flex items-center gap-4 text-gray-500 dark:text-gray-400 flex-wrap">
+        <div>Total: <span id="statTotal" class="font-bold text-gray-800 dark:text-gray-200">0</span></div>
+        <div>In Progress: <span id="statInProgress" class="font-bold text-blue-600 dark:text-blue-400">0</span></div>
+        <div>Completed: <span id="statCompleted" class="font-bold text-emerald-600 dark:text-emerald-400">0</span></div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- KANBAN BOARD CONTAINER -->
+  <main class="flex-grow p-4 md:p-6 overflow-x-auto">
+    <div id="boardContainer" class="flex gap-4 h-full min-w-[1250px]">
+      <!-- Columns rendering destination -->
+    </div>
+  </main>
+
+  <!-- TASK CREATE / EDIT MODAL -->
+  <div id="taskModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white dark:bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
+      
+      <!-- Header -->
+      <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-800/80">
+        <h3 id="modalTitle" class="text-lg font-bold">Create Task</h3>
+        <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Body Form -->
+      <form id="taskForm" onsubmit="saveTask(event)" class="p-6 overflow-y-auto space-y-4 text-sm flex-grow">
+        <input type="hidden" id="taskId">
+
+        <!-- Title -->
+        <div>
+          <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Task Title *</label>
+          <input type="text" id="taskTitleInput" required placeholder="e.g. Audit API Security Endpoints" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- Column & Work Category -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Column / Status</label>
+            <select id="taskColumnInput" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="backlog">Backlog</option>
+              <option value="todo">Ready / To Do</option>
+              <option value="inProgress">In Progress</option>
+              <option value="review">Review / Testing</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Category Tag</label>
+            <select id="taskCategoryInput" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="Feature">Feature</option>
+              <option value="Bug">Bug</option>
+              <option value="Admin">Admin</option>
+              <option value="Operations">Operations</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Priority & Due Date -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Priority</label>
+            <select id="taskPriorityInput" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Due Date</label>
+            <input type="date" id="taskDueDateInput" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400 mb-1">Description</label>
+          <textarea id="taskDescInput" rows="3" placeholder="Add context, acceptance criteria, or key dependencies..." class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+
+        <!-- Subtasks Checklist -->
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Subtasks / Checklist</label>
+            <button type="button" onclick="addSubtaskItem()" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+              + Add Subtask
+            </button>
+          </div>
+          <div id="subtasksContainer" class="space-y-2 max-h-36 overflow-y-auto pr-1">
+            <!-- Dynamic subtask fields -->
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-700">
+          <button type="button" id="deleteTaskBtn" onclick="deleteTaskFromModal()" class="px-3 py-2 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 rounded-lg text-sm transition hidden">
+            <i class="fa-solid fa-trash mr-1"></i> Delete
+          </button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" onclick="closeTaskModal()" class="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm transition">
+              Cancel
+            </button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition shadow-sm">
+              Save Task
+            </button>
+          </div>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- WIP LIMIT CONFIG MODAL -->
+  <div id="wipModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-xl shadow-2xl p-6 border border-gray-200 dark:border-gray-700">
+      <h3 class="text-lg font-bold mb-1">Configure Work-In-Progress Limits</h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Set operational capacity constraints to prevent active bottlenecks.</p>
+      
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">To Do Max Limit</label>
+          <input type="number" id="wipTodoInput" min="1" max="50" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">In Progress Max Limit</label>
+          <input type="number" id="wipInProgressInput" min="1" max="50" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Review / Testing Max Limit</label>
+          <input type="number" id="wipReviewInput" min="1" max="50" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-6">
+        <button onclick="closeWipModal()" class="px-4 py-2 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm">
+          Cancel
+        </button>
+        <button onclick="saveWipLimits()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
+          Apply Limits
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK MOVE CONTEXT MENU (Mobile / Click Alternative) -->
+  <div id="quickMoveMenu" class="fixed z-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl py-2 hidden w-52 text-sm">
+    <div class="px-3 py-1 text-xs font-semibold text-gray-400 uppercase">Move Column To</div>
+    <div id="quickMoveOptions" class="mt-1"></div>
+  </div>
+
+  <!-- APPLICATION LOGIC JavaScript -->
+  <script>
+    // --- COLUMNS DEFINITION ---
+    const COLUMNS = [
+      { id: 'backlog', title: 'Backlog', icon: 'fa-box-archive' },
+      { id: 'todo', title: 'Ready / To Do', icon: 'fa-circle-dot' },
+      { id: 'inProgress', title: 'In Progress', icon: 'fa-spinner' },
+      { id: 'review', title: 'Review / Testing', icon: 'fa-magnifying-glass' },
+      { id: 'done', title: 'Done', icon: 'fa-circle-check' }
+    ];
+
+    // --- INITIAL SEED DATA ---
+    const DEFAULT_TASKS = [
+      {
+        id: 'task-101',
+        title: 'Migrate OAuth Authentication to v2 Standard',
+        description: 'Upgrade identity provider SDKs to ensure compliance with upcoming security guidelines.',
+        category: 'Feature',
+        priority: 'High',
+        column: 'inProgress',
+        dueDate: getRelativeDate(1),
+        subtasks: [
+          { text: 'Update backend API routes', done: true },
+          { text: 'Run Integration tests', done: false }
+        ]
+      },
+      {
+        id: 'task-102',
+        title: 'Fix Memory Leak in Production Worker Nodes',
+        description: 'High memory consumption detected during scheduled cron sync jobs.',
+        category: 'Bug',
+        priority: 'Urgent',
+        column: 'inProgress',
+        dueDate: getRelativeDate(0),
+        subtasks: [
+          { text: 'Inspect heap snapshot', done: true },
+          { text: 'Deploy patch to staging', done: false }
+        ]
+      },
+      {
+        id: 'task-103',
+        title: 'Quarterly Infrastructure Capacity Review',
+        description: 'Analyze AWS utilization costs and terminate unattached volumes.',
+        category: 'Operations',
+        priority: 'Medium',
+        column: 'todo',
+        dueDate: getRelativeDate(4),
+        subtasks: []
+      },
+      {
+        id: 'task-104',
+        title: 'Design System Component Guidelines',
+        description: 'Document standard typography, color tokens, and accessibility patterns for dark mode.',
+        category: 'Admin',
+        priority: 'Low',
+        column: 'review',
+        dueDate: getRelativeDate(3),
+        subtasks: [
+          { text: 'Figma Token review', done: true }
+        ]
+      },
+      {
+        id: 'task-105',
+        title: 'Setup Automated CI/CD Deployment Pipeline',
+        description: 'Implement GitHub Actions for seamless deployment to Kubernetes clusters.',
+        category: 'Operations',
+        priority: 'High',
+        column: 'done',
+        dueDate: getRelativeDate(-2),
+        subtasks: [
+          { text: 'Configure Docker Build step', done: true },
+          { text: 'Configure Helm chart sync', done: true }
+        ]
+      }
+    ];
+
+    let state = {
+      tasks: [],
+      wipLimits: {
+        todo: 5,
+        inProgress: 3,
+        review: 3
+      },
+      filters: {
+        search: '',
+        category: 'ALL',
+        priority: 'ALL'
+      }
+    };
+
+    let activeDraggedTaskId = null;
+    let activeQuickMoveTaskId = null;
+
+    // --- INIT & UTILS ---
+    window.onload = function() {
+      initTheme();
+      loadState();
+      renderBoard();
+
+      // Close quick move menu on outside click
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#quickMoveMenu') && !e.target.closest('.quick-move-btn')) {
+          document.getElementById('quickMoveMenu').classList.add('hidden');
+        }
+      });
+    };
+
+    function getRelativeDate(daysOffset) {
+      const d = new Date();
+      d.setDate(d.getDate() + daysOffset);
+      return d.toISOString().split('T')[0];
+    }
+
+    function initTheme() {
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
+    function toggleDarkMode() {
+      if (document.documentElement.classList.contains('dark')) {
+        document.documentElement.classList.remove('dark');
+        localStorage.theme = 'light';
+      } else {
+        document.documentElement.classList.add('dark');
+        localStorage.theme = 'dark';
+      }
+    }
+
+    // --- STATE PERSISTENCE ---
+    function loadState() {
+      const savedTasks = localStorage.getItem('kanban_app_tasks');
+      const savedWip = localStorage.getItem('kanban_app_wip');
+
+      state.tasks = savedTasks ? JSON.parse(savedTasks) : DEFAULT_TASKS;
+      state.wipLimits = savedWip ? JSON.parse(savedWip) : state.wipLimits;
+    }
+
+    function saveState() {
+      localStorage.setItem('kanban_app_tasks', JSON.stringify(state.tasks));
+      localStorage.setItem('kanban_app_wip', JSON.stringify(state.wipLimits));
+      renderBoard();
+    }
+
+    // --- RENDER ENGINE ---
+    function renderBoard() {
+      const container = document.getElementById('boardContainer');
+      container.innerHTML = '';
+
+      let totalTasks = state.tasks.length;
+      let inProgressTasks = state.tasks.filter(t => t.column === 'inProgress').length;
+      let completedTasks = state.tasks.filter(t => t.column === 'done').length;
+
+      COLUMNS.forEach(col => {
+        // Filter Tasks for specific column
+        const columnTasks = state.tasks.filter(task => {
+          if (task.column !== col.id) return false;
+
+          const matchesSearch = task.title.toLowerCase().includes(state.filters.search.toLowerCase()) ||
+                                task.description.toLowerCase().includes(state.filters.search.toLowerCase());
+          const matchesCategory = state.filters.category === 'ALL' || task.category === state.filters.category;
+          const matchesPriority = state.filters.priority === 'ALL' || task.priority === state.filters.priority;
+
+          return matchesSearch && matchesCategory && matchesPriority;
+        });
+
+        // WIP Check
+        const limit = state.wipLimits[col.id];
+        const count = state.tasks.filter(t => t.column === col.id).length; // Real unfiltered count for WIP check
+        const isExceeded = limit && count > limit;
+
+        const colEl = document.createElement('div');
+        colEl.className = `flex-1 flex flex-col rounded-xl bg-gray-50/80 dark:bg-gray-800/40 border ${isExceeded ? 'border-red-400 dark:border-red-500/80 ring-2 ring-red-400/20' : 'border-gray-200/80 dark:border-gray-700/70'} p-3 max-w-sm h-full flex-shrink-0 transition-all`;
+
+        colEl.innerHTML = `
+          <!-- Column Header -->
+          <div class="flex items-center justify-between mb-3 px-1">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid ${col.icon} text-xs text-gray-400"></i>
+              <h2 class="font-bold text-sm text-gray-700 dark:text-gray-200">${col.title}</h2>
+              <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${isExceeded ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}">
+                ${count}${limit ? ` / ${limit}` : ''}
+              </span>
+            </div>
+            ${isExceeded ? `<span class="text-[10px] font-bold uppercase tracking-wider text-red-500 animate-pulse"><i class="fa-solid fa-triangle-exclamation"></i> Over WIP</span>` : ''}
+          </div>
+
+          <!-- Drop Area -->
+          <div 
+            class="task-drop-zone flex-grow overflow-y-auto space-y-3 pr-1"
+            data-column-id="${col.id}"
+            ondragover="handleDragOver(event)"
+            ondragleave="handleDragLeave(event)"
+            ondrop="handleDrop(event)"
+          >
+            ${columnTasks.map(task => renderTaskCard(task)).join('')}
+            ${columnTasks.length === 0 ? `<div class="h-24 border-2 border-dashed border-gray-200 dark:border-gray-700/50 rounded-lg flex items-center justify-center text-xs text-gray-400">No tasks</div>` : ''}
+          </div>
+        `;
+
+        container.appendChild(colEl);
+      });
+
+      // Update Summary Widgets
+      document.getElementById('statTotal').innerText = totalTasks;
+      document.getElementById('statInProgress').innerText = inProgressTasks;
+      document.getElementById('statCompleted').innerText = completedTasks;
+    }
+
+    function renderTaskCard(task) {
+      // Subtasks metrics
+      const totalSub = task.subtasks ? task.subtasks.length : 0;
+      const completedSub = task.subtasks ? task.subtasks.filter(s => s.done).length : 0;
+      const checklistHTML = totalSub > 0 ? `
+        <div class="flex items-center gap-1 text-[11px] ${completedSub === totalSub ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}">
+          <i class="fa-regular fa-square-check"></i>
+          <span>${completedSub}/${totalSub}</span>
+        </div>
+      ` : '';
+
+      // Badges
+      const priorityColors = {
+        Urgent: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800',
+        High: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+        Medium: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        Low: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600'
+      };
+
+      const categoryColors = {
+        Feature: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/30',
+        Bug: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30',
+        Admin: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30',
+        Operations: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30'
+      };
+
+      // Overdue check
+      let isOverdue = false;
+      if (task.dueDate && task.column !== 'done') {
+        const due = new Date(task.dueDate);
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        if (due < today) isOverdue = true;
+      }
+
+      return `
+        <div 
+          id="${task.id}"
+          draggable="true"
+          ondragstart="handleDragStart(event)"
+          ondragend="handleDragEnd(event)"
+          onclick="openTaskModal('${task.id}')"
+          class="task-card group relative bg-white dark:bg-gray-800 p-3.5 rounded-lg border border-gray-200/80 dark:border-gray-700/80 shadow-sm hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 transition cursor-grab active:cursor-grabbing"
+        >
+          <!-- Category Tag & Priority Header -->
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide ${categoryColors[task.category] || 'bg-gray-100 text-gray-600'}">
+              ${task.category || 'General'}
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium border ${priorityColors[task.priority]}">
+              ${task.priority}
+            </span>
+          </div>
+
+          <!-- Title -->
+          <h3 class="font-semibold text-sm text-gray-800 dark:text-gray-100 leading-snug mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+            ${escapeHtml(task.title)}
+          </h3>
+
+          <!-- Description snippet -->
+          ${task.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3 leading-relaxed">${escapeHtml(task.description)}</p>` : ''}
+
+          <!-- Footer Metadata -->
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-gray-100 dark:border-gray-700/50 mt-2">
+            <div class="flex items-center gap-3">
+              ${task.dueDate ? `
+                <span class="flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-500 font-semibold' : 'text-gray-400'}">
+                  <i class="fa-regular fa-calendar"></i>
+                  <span>${task.dueDate}</span>
+                </span>
+              ` : ''}
+              ${checklistHTML}
+            </div>
+
+            <!-- Quick Action Options -->
+            <button 
+              type="button"
+              onclick="showQuickMove(event, '${task.id}')" 
+              class="quick-move-btn text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              title="Quick Move Column"
+            >
+              <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    // --- DRAG AND DROP HANDLERS ---
+    function handleDragStart(e) {
+      activeDraggedTaskId = e.currentTarget.id;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', activeDraggedTaskId);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.task-drop-zone').forEach(zone => {
+        zone.classList.remove('drag-over');
+      });
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const dropZone = e.currentTarget;
+      dropZone.classList.remove('drag-over');
+      const targetColumnId = dropZone.dataset.columnId;
+
+      if (activeDraggedTaskId && targetColumnId) {
+        moveTask(activeDraggedTaskId, targetColumnId);
+        activeDraggedTaskId = null;
+      }
+    }
+
+    function moveTask(taskId, targetColumnId) {
+      const index = state.tasks.findIndex(t => t.id === taskId);
+      if (index !== -1) {
+        state.tasks[index].column = targetColumnId;
+        saveState();
+      }
+    }
+
+    // --- QUICK MOVE CONTEXT MENU ---
+    function showQuickMove(event, taskId) {
+      event.stopPropagation();
+      activeQuickMoveTaskId = taskId;
+
+      const menu = document.getElementById('quickMoveMenu');
+      const optionsContainer = document.getElementById('quickMoveOptions');
+      const task = state.tasks.find(t => t.id === taskId);
+
+      optionsContainer.innerHTML = COLUMNS.map(col => `
+        <button 
+          onclick="executeQuickMove('${col.id}')"
+          class="w-full text-left px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between ${col.id === task.column ? 'font-bold text-blue-600 dark:text-blue-400' : ''}"
+        >
+          <span>${col.title}</span>
+          ${col.id === task.column ? '<i class="fa-solid fa-check text-xs"></i>' : ''}
+        </button>
+      `).join('');
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
+      menu.style.left = `${Math.min(rect.left, window.innerWidth - 210)}px`;
+      menu.classList.remove('hidden');
+    }
+
+    function executeQuickMove(columnId) {
+      if (activeQuickMoveTaskId) {
+        moveTask(activeQuickMoveTaskId, columnId);
+        document.getElementById('quickMoveMenu').classList.add('hidden');
+        activeQuickMoveTaskId = null;
+      }
+    }
+
+    // --- TASK MODAL ACTIONS ---
+    function openTaskModal(taskId = null) {
+      const modal = document.getElementById('taskModal');
+      const title = document.getElementById('modalTitle');
+      const deleteBtn = document.getElementById('deleteTaskBtn');
+
+      document.getElementById('subtasksContainer').innerHTML = '';
+
+      if (taskId) {
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!task) return;
+
+        title.innerText = 'Edit Task';
+        deleteBtn.classList.remove('hidden');
+
+        document.getElementById('taskId').value = task.id;
+        document.getElementById('taskTitleInput').value = task.title;
+        document.getElementById('taskColumnInput').value = task.column;
+        document.getElementById('taskCategoryInput').value = task.category || 'Feature';
+        document.getElementById('taskPriorityInput').value = task.priority;
+        document.getElementById('taskDueDateInput').value = task.dueDate || '';
+        document.getElementById('taskDescInput').value = task.description || '';
+
+        if (task.subtasks) {
+          task.subtasks.forEach(s => addSubtaskItem(s.text, s.done));
+        }
+      } else {
+        title.innerText = 'Create Task';
+        deleteBtn.classList.add('hidden');
+        document.getElementById('taskForm').reset();
+        document.getElementById('taskId').value = '';
+        document.getElementById('taskColumnInput').value = 'todo';
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeTaskModal() {
+      document.getElementById('taskModal').classList.add('hidden');
+    }
+
+    function addSubtaskItem(text = '', done = false) {
+      const container = document.getElementById('subtasksContainer');
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2 subtask-row';
+      row.innerHTML = `
+        <input type="checkbox" ${done ? 'checked' : ''} class="subtask-checkbox rounded text-blue-600 focus:ring-0">
+        <input type="text" value="${escapeHtml(text)}" placeholder="Subtask details..." class="subtask-input flex-grow px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:outline-none">
+        <button type="button" onclick="this.parentElement.remove()" class="text-gray-400 hover:text-red-500 p-1">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      `;
+      container.appendChild(row);
+    }
+
+    function saveTask(e) {
+      e.preventDefault();
+
+      const taskId = document.getElementById('taskId').value;
+      const title = document.getElementById('taskTitleInput').value.trim();
+      const column = document.getElementById('taskColumnInput').value;
+      const category = document.getElementById('taskCategoryInput').value;
+      const priority = document.getElementById('taskPriorityInput').value;
+      const dueDate = document.getElementById('taskDueDateInput').value;
+      const description = document.getElementById('taskDescInput').value.trim();
+
+      // Collect Subtasks
+      const rows = document.querySelectorAll('.subtask-row');
+      const subtasks = [];
+      rows.forEach(r => {
+        const txt = r.querySelector('.subtask-input').value.trim();
+        const checked = r.querySelector('.subtask-checkbox').checked;
+        if (txt) subtasks.push({ text: txt, done: checked });
+      });
+
+      if (taskId) {
+        const index = state.tasks.findIndex(t => t.id === taskId);
+        if (index !== -1) {
+          state.tasks[index] = { ...state.tasks[index], title, column, category, priority, dueDate, description, subtasks };
+        }
+      } else {
+        const newTask = {
+          id: 'task-' + Date.now(),
+          title,
+          column,
+          category,
+          priority,
+          dueDate,
+          description,
+          subtasks
+        };
+        state.tasks.unshift(newTask);
+      }
+
+      saveState();
+      closeTaskModal();
+    }
+
+    function deleteTaskFromModal() {
+      const taskId = document.getElementById('taskId').value;
+      if (taskId) {
+        state.tasks = state.tasks.filter(t => t.id !== taskId);
+        saveState();
+        closeTaskModal();
+      }
+    }
+
+    // --- WIP LIMIT MODAL ---
+    function openWipModal() {
+      document.getElementById('wipTodoInput').value = state.wipLimits.todo || 5;
+      document.getElementById('wipInProgressInput').value = state.wipLimits.inProgress || 3;
+      document.getElementById('wipReviewInput').value = state.wipLimits.review || 3;
+      document.getElementById('wipModal').classList.remove('hidden');
+    }
+
+    function closeWipModal() {
+      document.getElementById('wipModal').classList.add('hidden');
+    }
+
+    function saveWipLimits() {
+      state.wipLimits.todo = parseInt(document.getElementById('wipTodoInput').value) || 5;
+      state.wipLimits.inProgress = parseInt(document.getElementById('wipInProgressInput').value) || 3;
+      state.wipLimits.review = parseInt(document.getElementById('wipReviewInput').value) || 3;
+
+      saveState();
+      closeWipModal();
+    }
+
+    // --- FILTERS ---
+    function applyFilters() {
+      state.filters.search = document.getElementById('searchInput').value;
+      state.filters.category = document.getElementById('tagFilter').value;
+      state.filters.priority = document.getElementById('priorityFilter').value;
+      renderBoard();
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('tagFilter').value = 'ALL';
+      document.getElementById('priorityFilter').value = 'ALL';
+      applyFilters();
+    }
+
+    // --- DATA IMPORT / EXPORT ---
+    function exportBoard() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `kanban_export_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function triggerImport() {
+      document.getElementById('importInput').click();
+    }
+
+    function importBoard(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported.tasks && Array.isArray(imported.tasks)) {
+            state.tasks = imported.tasks;
+            if (imported.wipLimits) state.wipLimits = imported.wipLimits;
+            saveState();
+          }
+        } catch (err) {
+          console.error("Invalid JSON format");
+        }
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
